@@ -38,14 +38,14 @@ impl Cidr {
     fn push(&self, b: bool) -> Self {
         let mut new = self.clone();
         new.bits.push(b);
-        return new;
+        new
     }
     fn pop(&self) -> Self {
         let mut new = self.clone();
         new.bits.pop();
-        return new;
+        new
     }
-    fn to_string(&self) -> String {
+    fn to_pretty_string(&self) -> String {
         let mut groups = vec![0, 0, 0, 0];
         let bits = self.bits();
         for (i, x) in bits.iter().enumerate() {
@@ -149,16 +149,15 @@ impl Tree {
         let me = Some((self.coverage(), self.cidr_count, self.cidr.clone()));
         let left = self.left.as_ref().and_then(|t| t.best_coverage.as_ref());
         let right = self.right.as_ref().and_then(|t| t.best_coverage.as_ref());
+        let all = [me.as_ref(), left, right];
 
-        let res = [me.as_ref(), left, right]
+        let candidates = all
             .iter()
             .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
+            .cloned();
 
         let score = |s: i32, f: f64| 2.0_f64.powi(32 - s) * (1.0 - f);
-        self.best_coverage = res
-            .into_iter()
+        self.best_coverage = candidates
             .min_by(|a, b| {
                 if score(a.2.size() as i32, a.0) < score(b.2.size() as i32, b.0) {
                     Less
@@ -194,11 +193,11 @@ impl Tree {
     }
 
     fn nodes(&self) -> usize {
-        return self.node_count;
+        self.node_count
     }
 
     fn cidrs(&self) -> usize {
-        return self.cidr_count;
+        self.cidr_count
     }
 
     fn insert(&mut self, cidr: &Cidr) {
@@ -216,22 +215,25 @@ impl Tree {
 
     fn print(&self) {
         if self.present {
-            println!("{}", self.cidr.to_string());
+            println!("{}", self.cidr.to_pretty_string());
         }
 
-        self.left.as_ref().map(|t| t.print());
-        self.right.as_ref().map(|t| t.print());
+        [self.left.as_ref(), self.right.as_ref()]
+            .iter()
+            .flatten()
+            .for_each(|t| t.print());
     }
 
     fn print_tree(&self, indent: String) {
         if self.present {
-            println!("{}", self.cidr.to_string());
+            println!("{} {}", indent, self.cidr.to_pretty_string());
         }
 
-        self.left
-            .as_ref()
-            .map(|t| t.print_tree(indent.clone() + "0"));
-        self.right.as_ref().map(|t| t.print_tree(indent + "1"));
+        [("0", self.left.as_ref()), ("1", self.right.as_ref())]
+            .iter()
+            .map(|(d, o)| o.map(|t| (d, t)))
+            .flatten()
+            .for_each(|(d, t)| t.print_tree(indent.clone() + d));
     }
 }
 
@@ -258,7 +260,8 @@ fn main() {
     println!("nodes: {}", tree.nodes());
     println!("cidrs: {}", tree.cidrs());
 
-    tree.print();
+    // tree.print();
+    tree.print_tree("".to_string());
 }
 
 #[cfg(test)]
@@ -317,10 +320,10 @@ mod tests {
 
     #[test]
     fn cidr_parse() {
-        assert_eq!(Cidr::parse("1.2.3.4/8").to_string(), "1.0.0.0/8");
-        assert_eq!(Cidr::parse("42.43.44.45/24").to_string(), "42.43.44.0/24");
+        assert_eq!(Cidr::parse("1.2.3.4/8").to_pretty_string(), "1.0.0.0/8");
+        assert_eq!(Cidr::parse("42.43.44.45/24").to_pretty_string(), "42.43.44.0/24");
         assert_eq!(
-            Cidr::parse("255.255.255.255/32").to_string(),
+            Cidr::parse("255.255.255.255/32").to_pretty_string(),
             "255.255.255.255/32"
         );
     }
