@@ -78,6 +78,17 @@ impl Tree {
         self.right = None;
     }
 
+    fn optimize(&mut self) {
+        let all_childs_present = [self.left.as_ref(), self.right.as_ref()]
+            .iter()
+            .all(|o| o.map(|t| t.present).unwrap_or(false));
+
+        if all_childs_present {
+            // Replace childs
+            self.make_present()
+        }
+    }
+
     fn update_coverage(&mut self) {
         let childs = [self.left.as_ref(), self.right.as_ref()]
             .iter()
@@ -124,6 +135,7 @@ impl Tree {
             self.make_present()
         }
 
+        self.optimize();
         self.update_cidr_count();
         self.update_node_count();
         self.update_coverage();
