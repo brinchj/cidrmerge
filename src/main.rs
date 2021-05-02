@@ -1,20 +1,25 @@
+use std::cmp::Ordering::{Greater, Less};
 use std::io;
 use std::io::BufRead;
-use std::cmp::Ordering::{Less, Greater};
 
 #[derive(Clone, Debug)]
 struct Cidr {
-    pub bits: Vec<bool>
+    pub bits: Vec<bool>,
 }
 
 impl Cidr {
     fn get_bits(ipv4cidr: &str, size: usize) -> Vec<bool> {
-        ipv4cidr.split('.').flat_map(
-            |group| {
+        ipv4cidr
+            .split('.')
+            .flat_map(|group| {
                 let g: i16 = group.parse().unwrap();
-                [7,6,5,4,3,2,1,0].iter().map(|b| g & (1 << b) > 0).collect::<Vec<bool>>()
-            }
-        ).take(size).collect()
+                [7, 6, 5, 4, 3, 2, 1, 0]
+                    .iter()
+                    .map(|b| g & (1 << b) > 0)
+                    .collect::<Vec<bool>>()
+            })
+            .take(size)
+            .collect()
     }
     fn bits(&self) -> &Vec<bool> {
         &self.bits
@@ -26,7 +31,9 @@ impl Cidr {
         let mut x = s.split('/');
         let ipv4cidr = x.next().unwrap();
         let size = x.next().unwrap().parse().unwrap();
-        Cidr{bits: Self::get_bits(ipv4cidr, size)}
+        Cidr {
+            bits: Self::get_bits(ipv4cidr, size),
+        }
     }
     fn push(&self, b: bool) -> Self {
         let mut new = self.clone();
@@ -46,7 +53,14 @@ impl Cidr {
                 groups[i / 8] |= 1 << (7 - (i & 7));
             }
         }
-        format!("{}.{}.{}.{}/{}", groups[0], groups[1], groups[2], groups[3], self.bits.len())
+        format!(
+            "{}.{}.{}.{}/{}",
+            groups[0],
+            groups[1],
+            groups[2],
+            groups[3],
+            self.bits.len()
+        )
     }
 }
 
@@ -64,7 +78,16 @@ struct Tree {
 
 impl Tree {
     fn new_node(cidr: Cidr) -> Self {
-        Tree{cidr, present: false, cidr_count: 0, node_count: 1, coverage: 0.0, left: None, right: None, best_coverage: None }
+        Tree {
+            cidr,
+            present: false,
+            cidr_count: 0,
+            node_count: 1,
+            coverage: 0.0,
+            left: None,
+            right: None,
+            best_coverage: None,
+        }
     }
 
     fn new() -> Self {
@@ -120,7 +143,7 @@ impl Tree {
     fn update_best_coverage(&mut self) {
         if self.present {
             self.best_coverage = None;
-            return
+            return;
         }
 
         let me = Some((self.coverage(), self.cidr_count, self.cidr.clone()));
@@ -129,24 +152,33 @@ impl Tree {
 
         let res = [me.as_ref(), left, right]
             .iter()
-            .flatten().cloned().collect::<Vec<_>>();
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
 
         let score = |s: i32, f: f64| 2.0_f64.powi(32 - s) * (1.0 - f);
-        self.best_coverage = res.into_iter().min_by(|a, b| if score(a.2.size() as i32, a.0) < score(b.2.size() as i32, b.0) { Less } else { Greater }).cloned()
+        self.best_coverage = res
+            .into_iter()
+            .min_by(|a, b| {
+                if score(a.2.size() as i32, a.0) < score(b.2.size() as i32, b.0) {
+                    Less
+                } else {
+                    Greater
+                }
+            })
+            .cloned()
     }
 
     fn insert_bits(&mut self, bits: &[bool]) {
         if self.present {
-            return
+            return;
         }
 
         if let Some(bit) = bits.first().cloned() {
             // Get or create the child we need to go to
             let next = self.cidr.push(bit);
             let opt_child = if bit { &mut self.right } else { &mut self.left };
-            let child = opt_child.get_or_insert_with(|| {
-                Box::new(Tree::new_node(next))
-            });
+            let child = opt_child.get_or_insert_with(|| Box::new(Tree::new_node(next)));
             // Recursive insert
             child.insert_bits(&bits[1..]);
         } else {
@@ -162,11 +194,11 @@ impl Tree {
     }
 
     fn nodes(&self) -> usize {
-        return self.node_count
+        return self.node_count;
     }
 
     fn cidrs(&self) -> usize {
-         return self.cidr_count
+        return self.cidr_count;
     }
 
     fn insert(&mut self, cidr: &Cidr) {
@@ -191,13 +223,14 @@ impl Tree {
         self.right.as_ref().map(|t| t.print());
     }
 
-
     fn print_tree(&self, indent: String) {
         if self.present {
             println!("{}", self.cidr.to_string());
         }
 
-        self.left.as_ref().map(|t| t.print_tree(indent.clone() + "0"));
+        self.left
+            .as_ref()
+            .map(|t| t.print_tree(indent.clone() + "0"));
         self.right.as_ref().map(|t| t.print_tree(indent + "1"));
     }
 }
@@ -233,7 +266,9 @@ mod tests {
     use super::{Cidr, Tree};
 
     fn bits(s: &str) -> Vec<bool> {
-        s.chars().map(|c| if c == '0' { false } else { true } ).collect()
+        s.chars()
+            .map(|c| if c == '0' { false } else { true })
+            .collect()
     }
 
     #[test]
@@ -274,13 +309,19 @@ mod tests {
 
         assert_eq!(tree.cidrs(), 3);
         assert_eq!(tree.nodes(), 1 + 8 + 9 + 32);
-        assert_eq!(tree.coverage(), 1.0/256.0 + 1.0/65536.0 + 1.0/4294967296.0);
+        assert_eq!(
+            tree.coverage(),
+            1.0 / 256.0 + 1.0 / 65536.0 + 1.0 / 4294967296.0
+        );
     }
 
     #[test]
     fn cidr_parse() {
         assert_eq!(Cidr::parse("1.2.3.4/8").to_string(), "1.0.0.0/8");
         assert_eq!(Cidr::parse("42.43.44.45/24").to_string(), "42.43.44.0/24");
-        assert_eq!(Cidr::parse("255.255.255.255/32").to_string(), "255.255.255.255/32");
+        assert_eq!(
+            Cidr::parse("255.255.255.255/32").to_string(),
+            "255.255.255.255/32"
+        );
     }
 }
