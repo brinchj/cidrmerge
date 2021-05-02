@@ -58,12 +58,13 @@ struct Tree {
     pub coverage: f64,
     pub cidr: Cidr,
     pub left: Option<Box<Tree>>,
-    pub right: Option<Box<Tree>>
+    pub right: Option<Box<Tree>>,
+    pub best_coverage: Option<(f64, usize, Cidr)>,
 }
 
 impl Tree {
     fn new_node(cidr: Cidr) -> Self {
-        Tree{cidr, present: false, cidr_count: 0, node_count: 1, coverage: 0.0, left: None, right: None }
+        Tree{cidr, present: false, cidr_count: 0, node_count: 1, coverage: 0.0, left: None, right: None, best_coverage: None }
     }
 
     fn new() -> Self {
@@ -116,6 +117,24 @@ impl Tree {
         self.cidr_count = if self.present { 1 } else { childs };
     }
 
+    fn update_best_coverage(&mut self) {
+        if self.present {
+            self.best_coverage = None;
+            return
+        }
+
+        let me = Some((self.coverage(), self.cidr_count, self.cidr.clone()));
+        let left = self.left.as_ref().and_then(|t| t.best_coverage.as_ref());
+        let right = self.right.as_ref().and_then(|t| t.best_coverage.as_ref());
+
+        let res = [me.as_ref(), left, right]
+            .iter()
+            .flatten().cloned().collect::<Vec<_>>();
+
+        let score = |s: i32, f: f64| 2.0_f64.powi(32 - s) * (1.0 - f);
+        self.best_coverage = res.into_iter().min_by(|a, b| if score(a.2.size() as i32, a.0) < score(b.2.size() as i32, b.0) { Less } else { Greater }).cloned()
+    }
+
     fn insert_bits(&mut self, bits: &[bool]) {
         if self.present {
             return
@@ -139,6 +158,7 @@ impl Tree {
         self.update_cidr_count();
         self.update_node_count();
         self.update_coverage();
+        self.update_best_coverage();
     }
 
     fn nodes(&self) -> usize {
@@ -158,20 +178,8 @@ impl Tree {
         self.coverage
     }
 
-    fn best_coverage(&self, cidr: Cidr) -> Option<(f64, usize, Cidr)> {
-        if self.present {
-            return None
-        }
-
-        let left = self.left.as_ref().and_then(|t| t.best_coverage(cidr.push(false)));
-        let right = self.right.as_ref().and_then(|t| t.best_coverage(cidr.push(true)));
-
-        let res = [Some((self.coverage(), self.cidr_count, cidr.clone())), left, right]
-            .iter()
-            .flatten().cloned().collect::<Vec<_>>();
-
-        let score = |s: i32, f: f64| 2.0_f64.powi(32 - s) * (1.0 - f);
-        res.into_iter().min_by(|a, b| if score(a.2.size() as i32, a.0) < score(b.2.size() as i32, b.0) { Less } else { Greater })
+    fn best_coverage(&self) -> Option<&(f64, usize, Cidr)> {
+        self.best_coverage.as_ref()
     }
 
     fn print(&self) {
@@ -205,7 +213,7 @@ fn main() {
     }
 
     while tree.cidrs() > 40 {
-        let best = tree.best_coverage(Cidr{bits: vec![]});
+        let best = tree.best_coverage().cloned();
         println!("coverage: {}, cidrs: {}", tree.coverage(), tree.cidrs());
 
         if let Some(pair) = best {
