@@ -40,11 +40,6 @@ impl Cidr {
         new.bits.push(b);
         new
     }
-    fn pop(&self) -> Self {
-        let mut new = self.clone();
-        new.bits.pop();
-        new
-    }
     fn to_pretty_string(&self) -> String {
         let mut groups = vec![0, 0, 0, 0];
         let bits = self.bits();
@@ -249,7 +244,6 @@ fn main() {
 
     while tree.cidrs() > 40 {
         let best = tree.best_coverage().cloned();
-        println!("coverage: {}, cidrs: {}", tree.coverage(), tree.cidrs());
 
         if let Some(pair) = best {
             tree.insert(&pair.2)
@@ -260,8 +254,7 @@ fn main() {
     println!("nodes: {}", tree.nodes());
     println!("cidrs: {}", tree.cidrs());
 
-    // tree.print();
-    tree.print_tree("".to_string());
+    tree.print();
 }
 
 #[cfg(test)]
